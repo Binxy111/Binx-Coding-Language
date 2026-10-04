@@ -1,3 +1,3 @@
-# Binx-Coding-Language
+# Binx The Coding Language
 The Experimental Coding Language
-more coming soon
+# How Does it Work?
