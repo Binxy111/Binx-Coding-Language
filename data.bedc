@@ -1,1 +1,3 @@
-ButtonLabel="Click Binx Button"
+LabelText="Username:"
+InputPlaceholder="Type your name here..."
+ButtonLabel="Submit"
