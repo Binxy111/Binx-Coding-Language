@@ -6,72 +6,52 @@
     <title>Binx Language Interpreter</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
-        #app { margin-top: 20px; padding: 10px; border: 1px solid #ccc; }
-        .binx-btn { padding: 8px 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        #app { margin-top: 20px; padding: 15px; border: 1px solid #ccc; min-height: 50px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+        .binx-btn { padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .binx-input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; width: 200px; }
+        .binx-label { font-size: 16px; font-weight: bold; color: #333; }
+        .error { color: red; font-weight: bold; }
     </style>
 </head>
 <body>
 
     <h1>Binx Runtime Environment</h1>
-    <div id="app"></div>
+    <div id="app">Loading files...</div>
 
     <script>
-        // Store Variables and Data
         const binxState = {
             vars: {},
             bedcData: {}
         };
 
-        // 1. Load BEDC File (Binx Extended Data Collection)
-        async function loadBEDC(filePath) {
-            try {
-                const response = await fetch(filePath);
-                if (!response.ok) throw new Error(`Failed to load ${filePath}`);
-                const text = await response.text();
-                
-                // Simple parser for BEDC key=value entries
-                text.split('\n').forEach(line => {
-                    const trimmed = line.trim();
-                    if (trimmed && !trimmed.startsWith('#')) {
-                        const [key, val] = trimmed.split('=');
-                        if (key && val) binxState.bedcData[key.trim()] = val.trim().replace(/^"|"$/g, '');
-                    }
-                });
-            } catch (err) {
-                console.warn('BEDC Notice:', err.message);
-            }
+        async function loadFile(filename) {
+            const res = await fetch(`./${filename}`);
+            if (!res.ok) throw new Error(`Could not load ${filename} (Status: ${res.status})`);
+            return await res.text();
         }
 
-        // 2. Load and Execute .binx Script
-        async function runBinx(filePath) {
-            try {
-                const response = await fetch(filePath);
-                if (!response.ok) throw new Error(`Failed to load ${filePath}`);
-                const code = await response.text();
-                parseAndExecuteBinx(code);
-            } catch (err) {
-                console.error('Binx Execution Error:', err.message);
-            }
+        function parseBEDC(text) {
+            text.split('\n').forEach(line => {
+                const trimmed = line.trim();
+                if (trimmed && !trimmed.startsWith('#')) {
+                    const [key, val] = trimmed.split('=');
+                    if (key && val) binxState.bedcData[key.trim()] = val.trim().replace(/^"|"$/g, '');
+                }
+            });
         }
 
-        // 3. Parse Binx Syntax Rules
         function parseAndExecuteBinx(code) {
             const lines = code.split('\n');
             let skipBlock = false;
 
             lines.forEach(line => {
                 let trimmed = line.trim();
-                
-                // Skip empty lines or copyright/header descriptions
-                if (!trimmed || trimmed.startsWith('Copyright') || trimmed.startsWith('====') || trimmed.startsWith('.')) {
-                    return;
-                }
+                if (!trimmed || trimmed.startsWith('Copyright') || trimmed.startsWith('====') || trimmed.startsWith('.')) return;
 
-                // Variable Creation: [NewVarName]="hi"
+                // Variable Assignment: [NewVarName]="hi"
                 const varMatch = trimmed.match(/^\[([a-zA-Z0-9_]+)\]="([^"]*)"$/);
                 if (varMatch) {
-                    const [, name, val] = varMatch;
-                    binxState.vars[name] = val;
+                    binxState.vars[varMatch[1]] = varMatch[2];
                     return;
                 }
 
@@ -80,50 +60,76 @@
                     const parts = trimmed.split('-[To]-');
                     const targetVar = parts[0].replace('[SetVar]="', '').replace('"', '');
                     const newValue = parts[1].replace(/^\[\vert{}\]$/g, '');
-                    
-                    if (binxState.vars[targetVar] !== undefined) {
-                        binxState.vars[targetVar] = newValue;
-                    }
+                    binxState.vars[targetVar] = newValue;
                     return;
                 }
 
-                // Conditional Evaluation: [if][Var]="Hello"
+                // Conditionals: [if][Var]="Hello"
                 const ifMatch = trimmed.match(/^\[if\]\[([a-zA-Z0-9_]+)\]="([^"]*)"$/);
                 if (ifMatch) {
-                    const [, varName, targetVal] = ifMatch;
-                    skipBlock = binxState.vars[varName] !== targetVal;
+                    skipBlock = binxState.vars[ifMatch[1]] !== ifMatch[2];
                     return;
                 }
 
-                // DoThings Action Execution: [MakeA]="Button"
+                // UI Rendering: [MakeA]="Button", [MakeA]="Label", [MakeA]="TextInput"
                 const makeMatch = trimmed.match(/^\[MakeA\]="([^"]*)"$/);
                 if (makeMatch) {
                     if (!skipBlock) {
-                        const elementType = makeMatch[1];
-                        renderComponent(elementType);
+                        renderComponent(makeMatch[1]);
                     }
-                    skipBlock = false; // Reset conditional flag
+                    skipBlock = false;
                 }
             });
         }
 
-        // 4. Component Rendering Engine
         function renderComponent(type) {
             const app = document.getElementById('app');
+
             if (type === "Button") {
                 const btn = document.createElement('button');
                 btn.className = 'binx-btn';
-                // Pull label value from BEDC data if present, otherwise fallback to current variable state
                 btn.innerText = binxState.bedcData['ButtonLabel'] || binxState.vars['Var'] || 'Binx Button';
                 app.appendChild(btn);
+            } 
+            else if (type === "Label") {
+                const label = document.createElement('span');
+                label.className = 'binx-label';
+                // Pulls text from BEDC 'LabelText' or fallback to Binx 'Var' variable
+                label.innerText = binxState.bedcData['LabelText'] || binxState.vars['Var'] || 'Default Label';
+                app.appendChild(label);
+            } 
+            else if (type === "TextInput") {
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'binx-input';
+                input.placeholder = binxState.bedcData['InputPlaceholder'] || 'Enter text...';
+                // Optional initial value assignment
+                if (binxState.vars['Var']) {
+                    input.value = binxState.vars['Var'];
+                }
+                app.appendChild(input);
             }
         }
 
-        // Auto-run on page load
-        window.addEventListener('DOMContentLoaded', async () => {
-            await loadBEDC('data.BEDC');
-            await runBinx('script.binx');
-        });
+        async function init() {
+            const app = document.getElementById('app');
+            try {
+                try {
+                    const bedcText = await loadFile('data.BEDC');
+                    parseBEDC(bedcText);
+                } catch (e) {
+                    console.warn('BEDC file optional or failed to load:', e.message);
+                }
+
+                const binxText = await loadFile('script.binx');
+                app.innerHTML = '';
+                parseAndExecuteBinx(binxText);
+            } catch (err) {
+                app.innerHTML = `<span class="error">Error: ${err.message}</span>`;
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
 </html>
