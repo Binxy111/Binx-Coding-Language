@@ -1,5 +1,4 @@
 Copyright Binxy Studios 2026
-[Var]="hi"
-[SetVar]="Var"-[To]-[Hello]
-[if][Var]="Hello"
+[MakeA]="Label"
+[MakeA]="TextInput"
 [MakeA]="Button"
